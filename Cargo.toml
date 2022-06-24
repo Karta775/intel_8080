@@ -6,7 +6,8 @@ version = "0.1.0"
 edition = "2021"
 
 [[bin]]
-name = "disassembler"
-path = "src/disassembler/main.rs"
+name = "intel_8080"
+path = "src/main.rs"
 
 [dependencies]
+clap = { version = "3.2.6", features = ["derive"] }
