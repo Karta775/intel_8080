@@ -3,6 +3,6 @@ An Intel 8080 emulator written in Rust
 
 ## Goals
 I would like to make the following:
-- [ ] A dissassembler
+- [ ] A disassembler
 - [ ] An assembler
 - [ ] An emulator capable of running at least Space Invaders
