@@ -1,4 +1,6 @@
 #!/usr/bin/python3
+# This is a really rough script that takes the provided opcodes.html file
+# from emulator101.com and converts it into Rust match statements.
 
 table = []
 
@@ -19,6 +21,7 @@ for row in table:
     if row[2] != '':
         size = int(row[2])
 
+    # Generate the lines of Rust code
     output = "0x"
     output += row[0] + " => { print_info(pc, "
     output += "&op_" + str(size) + ", "
