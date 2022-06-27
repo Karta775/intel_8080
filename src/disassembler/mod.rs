@@ -1,9 +1,9 @@
+macro_rules! table_header  { () => { "| {0: ^4} | {1: ^8} | {2: ^11} | {3: ^15} | {4: ^47} |" }; }
+macro_rules! table_content { () => { "| {0: <4} | {1: <8} | {2: <11} | {3: <15} | {4: <47} |" }; }
+
 /// Loops over every opcode in the array and translates each into mnemonics and descriptions
 pub fn disassemble_ops(ops: &[u8]) {
-    println!(
-        "| {0: ^4} | {1: ^8} | {2: ^11} | {3: ^18} | {4: ^47} |",
-        "pc", "opcode", "mnemonic", "flags", "function"
-    );
+    println!(table_header!(), "pc", "opcode", "mnemonic", "flags", "function");
     let mut i = 0;
     while i < ops.len() {
         i += disassemble_op(&ops[i..], i);
@@ -13,19 +13,18 @@ pub fn disassemble_ops(ops: &[u8]) {
 /// Helper function that formats and prints the data
 fn print_info(pc: usize, op: &str, mnemonic: &str, flags: &str, function: &str) {
     let pc_str = format!("{:04x}", pc);
-    println!("| {0: <4} | {1: <8} | {2: <11} | {3: <18} | {4: <47} |",
-             pc_str, op, mnemonic, flags, function);
+    println!(table_content!(), pc_str, op, mnemonic, flags, function);
 }
 
 /// Generates a string containing the correct number of bytes for an instruction
-fn generate_op_string(ops: &[u8], size: usize) -> Option<String> {
-    if ops.len() < size {
+fn generate_op_string(ops: &[u8], cycles: usize) -> Option<String> {
+    if ops.len() < cycles {
         return None;
     }
 
     // Generate the string of opcodes
     let mut op_string = format!("{:02x}", &ops[0]);
-    for op in &ops[1..size] {
+    for op in &ops[1..cycles] {
         op_string = format!("{} {:02x}", op_string, op);
     }
 
@@ -38,6 +37,7 @@ fn disassemble_op(ops: &[u8], pc: usize) -> usize {
     let op_2 = generate_op_string(&ops, 2).unwrap_or_default();
     let op_3 = generate_op_string(&ops, 3).unwrap_or_default();
 
+    #[allow(unreachable_patterns)] // Hide warning due to CLion bug.
     match ops[0] { // This match returns some usize corresponding to the number of CPU cycles
         0x00 => { print_info(pc, &op_1, "NOP", "", ""); 1},
         0x01 => { print_info(pc, &op_3, "LXI B,D16", "", "B <- byte 3, C <- byte 2"); 3},
