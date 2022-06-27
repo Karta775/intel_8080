@@ -27,5 +27,5 @@ for row in table:
     output += "&op_" + str(size) + ", "
     output += '"' + row[1] + '", '
     output += '"' + row[3] + '", '
-    output += '"' + row[4] + '") },'
+    output += '"' + row[4] + '"); ' + str(size) + '},'
     print(output)
