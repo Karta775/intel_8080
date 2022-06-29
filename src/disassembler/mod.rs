@@ -32,7 +32,7 @@ fn generate_op_string(ops: &[u8], cycles: usize) -> Option<String> {
 }
 
 /// Disassembles a single opcode by matching it against the instruction set
-fn disassemble_op(ops: &[u8], pc: usize) -> usize {
+pub fn disassemble_op(ops: &[u8], pc: usize) -> usize {
     let op_1 = generate_op_string(&ops, 1).unwrap_or_default();
     let op_2 = generate_op_string(&ops, 2).unwrap_or_default();
     let op_3 = generate_op_string(&ops, 3).unwrap_or_default();
