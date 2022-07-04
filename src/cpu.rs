@@ -10,6 +10,8 @@ pub struct Cpu {
     pub c: u8,
     pub d: u8,
     pub e: u8,
+    pub h: u8,
+    pub l: u8,
     // Flags
     pub z: bool,
     pub s: bool,
@@ -25,7 +27,7 @@ impl Cpu {
         Cpu {
             pc: 0,
             ram: vec![0; 0xFFFF],
-            a: 0, b: 0, c: 0, d: 0, e:0,
+            a: 0, b: 0, c: 0, d: 0, e: 0, h: 0, l: 0,
             z: false, s: false, p: false, cy: false, ac: false,
             unimplemented: Vec::new(),
         }
@@ -55,7 +57,7 @@ impl Cpu {
         let mut advance_pc = true;
 
         // TODO: Clean up this sloppy code, maybe use a function like in the disassembler
-        let byte_1 = self.ram[self.pc as usize];
+        let _byte_1 = self.ram[self.pc as usize];
         let mut byte_2: u8 = 0;
         let mut byte_3: u8 = 0;
         if self.pc <= (u16::MAX - 2) {
@@ -96,7 +98,14 @@ impl Cpu {
             0x0b => { bytes = 1; self.op_unimplemented("DCX B", "BC = BC-1") }, // DCX B
             0x0c => { bytes = 1; self.op_unimplemented("INR C", "C <- C+1") }, // INR C
             0x0d => { bytes = 1; self.op_unimplemented("DCR C", "C <-C-1") }, // DCR C
-            0x0e => { bytes = 2; self.op_unimplemented("MVI C,D8", "C <- byte 2") }, // MVI C,D8
+            0x0e => {
+                self.op_implemented(
+                    &format!("MVI C,#${:02x}", byte_2),
+                    "C <- byte 2"
+                );
+                bytes = 2;
+                self.c = byte_2;
+            }, // MVI C,D8
             0x0f => { bytes = 1; self.op_unimplemented("RRC", "A = A >> 1; bit 7 = prev bit 0; CY = prev bit 0") }, // RRC
             0x10 => { bytes = 1; self.op_unimplemented("-", "") }, // -
             0x11 => {
@@ -123,7 +132,15 @@ impl Cpu {
             0x1e => { bytes = 2; self.op_unimplemented("MVI E,D8", "E <- byte 2") }, // MVI E,D8
             0x1f => { bytes = 1; self.op_unimplemented("RAR", "A = A >> 1; bit 7 = prev bit 7; CY = prev bit 0") }, // RAR
             0x20 => { bytes = 1; self.op_unimplemented("-", "") }, // -
-            0x21 => { bytes = 3; self.op_unimplemented("LXI H,D16", "H <- byte 3, L <- byte 2") }, // LXI H,D16
+            0x21 => {
+                self.op_implemented(
+                    &format!("LXI H,{:04x}", two_byte),
+                    "H <- byte 3, L <- byte 2"
+                );
+                bytes = 3;
+                self.h = byte_3;
+                self.l = byte_2;
+            }, // LXI H,D16
             0x22 => { bytes = 3; self.op_unimplemented("SHLD adr", "(adr) <-L; (adr+1)<-H") }, // SHLD adr
             0x23 => { bytes = 1; self.op_unimplemented("INX H", "HL <- HL + 1") }, // INX H
             0x24 => { bytes = 1; self.op_unimplemented("INR H", "H <- H+1") }, // INR H
@@ -278,7 +295,11 @@ impl Cpu {
             0xa4 => { bytes = 1; self.op_unimplemented("ANA H", "A <- A & H") }, // ANA H
             0xa5 => { bytes = 1; self.op_unimplemented("ANA L", "A <- A & L") }, // ANA L
             0xa6 => { bytes = 1; self.op_unimplemented("ANA M", "A <- A & (HL)") }, // ANA M
-            0xa7 => { bytes = 1; self.op_unimplemented("ANA A", "A <- A & A") }, // ANA A
+            0xa7 => {
+                self.op_implemented("ANA A", "A <- A & A");
+                bytes = 1;
+                self.a &= self.a;
+            }, // ANA A TODO: Check if this is how the instruction should be implemented :thinking:
             0xa8 => { bytes = 1; self.op_unimplemented("XRA B", "A <- A ^ B") }, // XRA B
             0xa9 => { bytes = 1; self.op_unimplemented("XRA C", "A <- A ^ C") }, // XRA C
             0xaa => { bytes = 1; self.op_unimplemented("XRA D", "A <- A ^ D") }, // XRA D
@@ -286,7 +307,11 @@ impl Cpu {
             0xac => { bytes = 1; self.op_unimplemented("XRA H", "A <- A ^ H") }, // XRA H
             0xad => { bytes = 1; self.op_unimplemented("XRA L", "A <- A ^ L") }, // XRA L
             0xae => { bytes = 1; self.op_unimplemented("XRA M", "A <- A ^ (HL)") }, // XRA M
-            0xaf => { bytes = 1; self.op_unimplemented("XRA A", "A <- A ^ A") }, // XRA A
+            0xaf => {
+                self.op_implemented("XRA A", "A <- A ^ A");
+                bytes = 1;
+                self.a ^= self.a;
+            }, // XRA A TODO: Check if this is how the instruction should be implemented :thinking:
             0xb0 => { bytes = 1; self.op_unimplemented("ORA B", "A <- A | B") }, // ORA B
             0xb1 => { bytes = 1; self.op_unimplemented("ORA C", "A <- A | C") }, // ORA C
             0xb2 => { bytes = 1; self.op_unimplemented("ORA D", "A <- A | D") }, // ORA D
@@ -329,7 +354,11 @@ impl Cpu {
                     "A <- A + byte"
                 );
                 bytes = 2;
-                self.a += byte_2;
+                // TODO: Write a function to handle all of this (overflowing add, setting flags)
+                let (result, carry) = self.a.overflowing_add(byte_2);
+                self.a = result;
+                self.cy = carry;
+                self.z = (result == 0);
             }, // ADI D8
             0xc7 => { bytes = 1; self.op_unimplemented("RST 0", "CALL $0") }, // RST 0
             0xc8 => { bytes = 1; self.op_unimplemented("RZ", "if Z, RET") }, // RZ
