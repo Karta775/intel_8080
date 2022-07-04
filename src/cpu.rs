@@ -4,11 +4,19 @@ use log::{debug, error, log_enabled, info, warn};
 pub struct Cpu {
     pub pc: u16,
     pub ram: Vec<u8>,
+    // Registers
     pub a: u8,
     pub b: u8,
     pub c: u8,
     pub d: u8,
     pub e: u8,
+    // Flags
+    pub z: bool,
+    pub s: bool,
+    pub p: bool,
+    pub cy: bool,
+    pub ac: bool,
+    // Debugging
     pub unimplemented: Vec<u8>,
 }
 
@@ -18,6 +26,7 @@ impl Cpu {
             pc: 0,
             ram: vec![0; 0xFFFF],
             a: 0, b: 0, c: 0, d: 0, e:0,
+            z: false, s: false, p: false, cy: false, ac: false,
             unimplemented: Vec::new(),
         }
     }
@@ -65,7 +74,8 @@ impl Cpu {
                     "B = byte 3, C = byte 2"
                 );
                 bytes = 3;
-                self.b = byte_3; self.c = byte_2;
+                self.b = byte_3;
+                self.c = byte_2;
             }, // LXI B,D16
             0x02 => { bytes = 1; self.op_unimplemented("STAX B", "(BC) <- A") }, // STAX B
             0x03 => { bytes = 1; self.op_unimplemented("INX B", "BC <- BC+1") }, // INX B
@@ -82,7 +92,15 @@ impl Cpu {
             0x0e => { bytes = 2; self.op_unimplemented("MVI C,D8", "C <- byte 2") }, // MVI C,D8
             0x0f => { bytes = 1; self.op_unimplemented("RRC", "A = A >> 1; bit 7 = prev bit 0; CY = prev bit 0") }, // RRC
             0x10 => { bytes = 1; self.op_unimplemented("-", "") }, // -
-            0x11 => { bytes = 3; self.op_unimplemented("LXI D,D16", "D <- byte 3, E <- byte 2") }, // LXI D,D16
+            0x11 => {
+                self.op_implemented(
+                    &format!("LXI D,D16 {:02x} {:02x}", byte_2, byte_3),
+                    "D <- byte 3, E <- byte 2"
+                );
+                bytes = 3;
+                self.d = byte_3;
+                self.e = byte_2;
+            }, // LXI D,D16
             0x12 => { bytes = 1; self.op_unimplemented("STAX D", "(DE) <- A") }, // STAX D
             0x13 => { bytes = 1; self.op_unimplemented("INX D", "DE <- DE + 1") }, // INX D
             0x14 => { bytes = 1; self.op_unimplemented("INR D", "D <- D+1") }, // INR D
@@ -266,7 +284,14 @@ impl Cpu {
             0xbf => { bytes = 1; self.op_unimplemented("CMP A", "A - A") }, // CMP A
             0xc0 => { bytes = 1; self.op_unimplemented("RNZ", "if NZ, RET") }, // RNZ
             0xc1 => { bytes = 1; self.op_unimplemented("POP B", "C <- (sp); B <- (sp+1); sp <- sp+2") }, // POP B
-            0xc2 => { bytes = 3; self.op_unimplemented("JNZ adr", "if NZ, PC <- adr") }, // JNZ adr
+            0xc2 => {
+                self.op_implemented(
+                    &format!("JNZ ${:04x}", two_byte),
+                    "if NZ, PC <- adr"
+                );
+                bytes = 3;
+                if !self.z { self.pc = two_byte };
+            }, // JNZ adr
             0xc3 => {
                 self.op_implemented(
                     &format!("JMP ${:04x}", two_byte),
