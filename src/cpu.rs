@@ -70,8 +70,8 @@ impl Cpu {
             0x00 => { bytes = 1; self.op_implemented("NOP", "Do nothing"); }, // NOP
             0x01 => {
                 self.op_implemented(
-                    &format!("LXI B,D16 {:02x} {:02x}", byte_2, byte_3),
-                    "B = byte 3, C = byte 2"
+                    &format!("LXI B,#${:04x}", two_byte),
+                    "B = left, C = right"
                 );
                 bytes = 3;
                 self.b = byte_3;
@@ -81,7 +81,14 @@ impl Cpu {
             0x03 => { bytes = 1; self.op_unimplemented("INX B", "BC <- BC+1") }, // INX B
             0x04 => { bytes = 1; self.op_unimplemented("INR B", "B <- B+1") }, // INR B
             0x05 => { bytes = 1; self.op_unimplemented("DCR B", "B <- B-1") }, // DCR B
-            0x06 => { bytes = 2; self.op_unimplemented("MVI B, D8", "B <- byte 2") }, // MVI B, D8
+            0x06 => {
+                self.op_implemented(
+                    &format!("MVI B,#${:02x}", byte_2),
+                    "B <- byte 2"
+                );
+                bytes = 2;
+                self.b = byte_2;
+            }, // MVI B, D8
             0x07 => { bytes = 1; self.op_unimplemented("RLC", "A = A << 1; bit 0 = prev bit 7; CY = prev bit 7") }, // RLC
             0x08 => { bytes = 1; self.op_unimplemented("-", "") }, // -
             0x09 => { bytes = 1; self.op_unimplemented("DAD B", "HL = HL + BC") }, // DAD B
@@ -94,7 +101,7 @@ impl Cpu {
             0x10 => { bytes = 1; self.op_unimplemented("-", "") }, // -
             0x11 => {
                 self.op_implemented(
-                    &format!("LXI D,D16 {:02x} {:02x}", byte_2, byte_3),
+                    &format!("LXI D,#${:04x}", two_byte),
                     "D <- byte 3, E <- byte 2"
                 );
                 bytes = 3;
@@ -133,7 +140,14 @@ impl Cpu {
             0x2f => { bytes = 1; self.op_unimplemented("CMA", "A <- !A") }, // CMA
             0x30 => { bytes = 1; self.op_unimplemented("-", "") }, // -
             0x31 => { bytes = 3; self.op_unimplemented("LXI SP, D16", "SP.hi <- byte 3, SP.lo <- byte 2") }, // LXI SP, D16
-            0x32 => { bytes = 3; self.op_unimplemented("STA adr", "(adr) <- A") }, // STA adr
+            0x32 => {
+                self.op_implemented(
+                    &format!("STA ${:04x}", two_byte),
+                    "(adr) <- A"
+                );
+                bytes = 3;
+                self.ram[two_byte as usize] = self.a;
+            }, // STA adr
             0x33 => { bytes = 1; self.op_unimplemented("INX SP", "SP = SP + 1") }, // INX SP
             0x34 => { bytes = 1; self.op_unimplemented("INR M", "(HL) <- (HL)+1") }, // INR M
             0x35 => { bytes = 1; self.op_unimplemented("DCR M", "(HL) <- (HL)-1") }, // DCR M
@@ -141,13 +155,20 @@ impl Cpu {
             0x37 => { bytes = 1; self.op_unimplemented("STC", "CY = 1") }, // STC
             0x38 => { bytes = 1; self.op_unimplemented("-", "") }, // -
             0x39 => { bytes = 1; self.op_unimplemented("DAD SP", "HL = HL + SP") }, // DAD SP
-            0x3a => { bytes = 3; self.op_unimplemented("LDA adr", "A <- (adr)") }, // LDA adr
+            0x3a => {
+                self.op_implemented(
+                    &format!("LDA ${:04x}", two_byte),
+                    "A <- (adr)"
+                );
+                bytes = 3;
+                self.a = self.ram[two_byte as usize];
+            }, // LDA adr
             0x3b => { bytes = 1; self.op_unimplemented("DCX SP", "SP = SP-1") }, // DCX SP
             0x3c => { bytes = 1; self.op_unimplemented("INR A", "A <- A+1") }, // INR A
             0x3d => { bytes = 1; self.op_unimplemented("DCR A", "A <- A-1") }, // DCR A
             0x3e => {
                 self.op_implemented(
-                    &format!("MVI A,D8 {:02x}", byte_2),
+                    &format!("MVI A,#${:02x}", byte_2),
                     "A <- byte 2"
                 );
                 bytes = 2;
@@ -302,11 +323,26 @@ impl Cpu {
                 self.pc = two_byte;
             }, // JMP adr            0xc4 => { cycles = 3; self.op_unimplemented("CNZ adr", "if NZ, CALL adr") }, // CNZ adr
             0xc5 => { bytes = 1; self.op_unimplemented("PUSH B", "(sp-2)<-C; (sp-1)<-B; sp <- sp - 2") }, // PUSH B
-            0xc6 => { bytes = 2; self.op_unimplemented("ADI D8", "A <- A + byte") }, // ADI D8
+            0xc6 => {
+                self.op_implemented(
+                    &format!("ADI #${:02x}", byte_2),
+                    "A <- A + byte"
+                );
+                bytes = 2;
+                self.a += byte_2;
+            }, // ADI D8
             0xc7 => { bytes = 1; self.op_unimplemented("RST 0", "CALL $0") }, // RST 0
             0xc8 => { bytes = 1; self.op_unimplemented("RZ", "if Z, RET") }, // RZ
             0xc9 => { bytes = 1; self.op_unimplemented("RET", "PC.lo <- (sp); PC.hi<-(sp+1); SP <- SP+2") }, // RET
-            0xca => { bytes = 3; self.op_unimplemented("JZ adr", "if Z, PC <- adr") }, // JZ adr
+            0xca => {
+                self.op_implemented(
+                    &format!("JZ ${:04x}", two_byte),
+                    "if Z, PC <- adr"
+                );
+                bytes = 3;
+                advance_pc = false;
+                if self.z { self.pc = two_byte; };
+            }, // JZ adr
             0xcb => { bytes = 1; self.op_unimplemented("-", "") }, // -
             0xcc => { bytes = 3; self.op_unimplemented("CZ adr", "if Z, CALL adr") }, // CZ adr
             0xcd => { bytes = 3; self.op_unimplemented("CALL adr", "(SP-1)<-PC.hi;(SP-2)<-PC.lo;SP<-SP-2;PC=adr") }, // CALL adr
