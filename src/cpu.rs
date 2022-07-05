@@ -4,6 +4,7 @@ use log::{debug, error, log_enabled, info, warn};
 pub struct Cpu {
     pub pc: u16,
     pub ram: Vec<u8>,
+    pub sp: usize,
     // Registers
     pub a: u8,
     pub b: u8,
@@ -27,6 +28,7 @@ impl Cpu {
         Cpu {
             pc: 0,
             ram: vec![0; 0xFFFF],
+            sp: 0x3FFF,
             a: 0, b: 0, c: 0, d: 0, e: 0, h: 0, l: 0,
             z: false, s: false, p: false, cy: false, ac: false,
             unimplemented: Vec::new(),
@@ -156,7 +158,14 @@ impl Cpu {
             0x2e => { bytes = 2; self.op_unimplemented("MVI L, D8", "L <- byte 2") }, // MVI L, D8
             0x2f => { bytes = 1; self.op_unimplemented("CMA", "A <- !A") }, // CMA
             0x30 => { bytes = 1; self.op_unimplemented("-", "") }, // -
-            0x31 => { bytes = 3; self.op_unimplemented("LXI SP, D16", "SP.hi <- byte 3, SP.lo <- byte 2") }, // LXI SP, D16
+            0x31 => {
+                self.op_implemented(
+                    &format!("LXI SP,#${:04x}", two_byte),
+                    "SP.hi <- byte 3, SP.lo <- byte 2"
+                );
+                bytes = 3;
+                self.sp = two_byte as usize;
+            }, // LXI SP, D16
             0x32 => {
                 self.op_implemented(
                     &format!("STA ${:04x}", two_byte),
@@ -374,7 +383,18 @@ impl Cpu {
             }, // JZ adr
             0xcb => { bytes = 1; self.op_unimplemented("-", "") }, // -
             0xcc => { bytes = 3; self.op_unimplemented("CZ adr", "if Z, CALL adr") }, // CZ adr
-            0xcd => { bytes = 3; self.op_unimplemented("CALL adr", "(SP-1)<-PC.hi;(SP-2)<-PC.lo;SP<-SP-2;PC=adr") }, // CALL adr
+            0xcd => {
+                self.op_implemented(
+                    &format!("CALL ${:04x}", two_byte),
+                    "(SP-1)<-PC.hi;(SP-2)<-PC.lo;SP<-SP-2;PC=adr"
+                );
+                bytes = 3;
+                self.ram[self.sp - 1] = (self.pc & 0x00FF) as u8;
+                self.ram[self.sp - 2] = (self.pc & 0xFF00 >> 8) as u8;
+                self.sp -= 2;
+                self.pc = two_byte;
+                advance_pc = false;
+            }, // CALL adr
             0xce => { bytes = 2; self.op_unimplemented("ACI D8", "A <- A + data + CY") }, // ACI D8
             0xcf => { bytes = 1; self.op_unimplemented("RST 1", "CALL $8") }, // RST 1
             0xd0 => { bytes = 1; self.op_unimplemented("RNC", "if NCY, RET") }, // RNC
