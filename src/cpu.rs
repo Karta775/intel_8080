@@ -86,6 +86,13 @@ impl Cpu {
         result
     }
 
+    fn cpi(&mut self, reg: u8, value: u8) -> u8 {
+        let (result, carry) = reg.overflowing_sub(value);
+        self.set_flags(result as u16, carry);
+        result
+    }
+
+    // TODO: Remove and replace with cpi(_,1)
     fn dcr(&mut self, reg: u8) -> u8 {
         let (result, carry) = reg.overflowing_sub(1);
         self.set_flags(result as u16, carry);
@@ -233,7 +240,15 @@ impl Cpu {
             0x33 => { bytes = 1; self.op_unimplemented("INX SP", "SP = SP + 1") }, // INX SP
             0x34 => { bytes = 1; self.op_unimplemented("INR M", "(HL) <- (HL)+1") }, // INR M
             0x35 => { bytes = 1; self.op_unimplemented("DCR M", "(HL) <- (HL)-1") }, // DCR M
-            0x36 => { bytes = 2; self.op_unimplemented("MVI M,D8", "(HL) <- byte 2") }, // MVI M,D8
+            0x36 => {
+                self.op_implemented(
+                    &format!("MVI M,#${:02x}", byte_2),
+                    "(HL) <- byte 2"
+                );
+                bytes = 2;
+                let hl = self.hl(); // TODO: 2nd instance of a bad piece of code. Fix this.
+                self.ram[hl as usize] = byte_2;
+            }, // MVI M,D8
             0x37 => { bytes = 1; self.op_unimplemented("STC", "CY = 1") }, // STC
             0x38 => { bytes = 1; self.op_unimplemented("-", "") }, // -
             0x39 => { bytes = 1; self.op_unimplemented("DAD SP", "HL = HL + SP") }, // DAD SP
@@ -322,7 +337,11 @@ impl Cpu {
             0x79 => { bytes = 1; self.op_unimplemented("MOV A,C", "A <- C") }, // MOV A,C
             0x7a => { bytes = 1; self.op_unimplemented("MOV A,D", "A <- D") }, // MOV A,D
             0x7b => { bytes = 1; self.op_unimplemented("MOV A,E", "A <- E") }, // MOV A,E
-            0x7c => { bytes = 1; self.op_unimplemented("MOV A,H", "A <- H") }, // MOV A,H
+            0x7c => {
+                self.op_implemented("MOV A,H", "A <- H");
+                bytes = 1;
+                self.a = self.h;
+            }, // MOV A,H
             0x7d => { bytes = 1; self.op_unimplemented("MOV A,L", "A <- L") }, // MOV A,L
             0x7e => { bytes = 1; self.op_unimplemented("MOV A,M", "A <- (HL)") }, // MOV A,M
             0x7f => { bytes = 1; self.op_unimplemented("MOV A,A", "A <- A") }, // MOV A,A
@@ -406,7 +425,10 @@ impl Cpu {
                     "if NZ, PC <- adr"
                 );
                 bytes = 3;
-                if !self.z { self.pc = two_byte };
+                if !self.z {
+                    self.pc = two_byte;
+                    advance_pc = false;
+                };
             }, // JNZ adr
             0xc3 => {
                 self.op_implemented(
@@ -428,7 +450,7 @@ impl Cpu {
                 let (result, carry) = self.a.overflowing_add(byte_2);
                 self.a = result;
                 self.cy = carry;
-                self.z = (result == 0);
+                self.z = result == 0;
             }, // ADI D8
             0xc7 => { bytes = 1; self.op_unimplemented("RST 0", "CALL $0") }, // RST 0
             0xc8 => { bytes = 1; self.op_unimplemented("RZ", "if Z, RET") }, // RZ
@@ -446,8 +468,10 @@ impl Cpu {
                     "if Z, PC <- adr"
                 );
                 bytes = 3;
-                advance_pc = false;
-                if self.z { self.pc = two_byte; };
+                if self.z {
+                    self.pc = two_byte;
+                    advance_pc = false;
+                };
             }, // JZ adr
             0xcb => { bytes = 1; self.op_unimplemented("-", "") }, // -
             0xcc => { bytes = 3; self.op_unimplemented("CZ adr", "if Z, CALL adr") }, // CZ adr
@@ -512,7 +536,14 @@ impl Cpu {
             0xfb => { bytes = 1; self.op_unimplemented("EI", "special") }, // EI
             0xfc => { bytes = 3; self.op_unimplemented("CM adr", "if M, CALL adr") }, // CM adr
             0xfd => { bytes = 1; self.op_unimplemented("-", "") }, // -
-            0xfe => { bytes = 2; self.op_unimplemented("CPI D8", "A - data") }, // CPI D8
+            0xfe => {
+                self.op_implemented(
+                    &format!("CPI #${:02x}", byte_2),
+                    "A - data"
+                );
+                bytes = 2;
+                self.a = self.cpi(self.a, byte_2);
+            }, // CPI D8
             0xff => { bytes = 1; self.op_unimplemented("RST 7", "CALL $38") }, // RST 7
             _ => () // Unfortunately CLion's Rust plugin requires this although it compiles fine without.
         }
