@@ -33,7 +33,7 @@ fn main() {
         let mut cpu = Cpu::new();
         cpu.load_rom(rom);
         // 'running: loop {
-        for i in 0..10000 {
+        for i in 0..100000 {
             if cpu.pc == 65535 { break } // TODO: Artificial limit, delete when implemented properly
             cpu.execute();
         }
