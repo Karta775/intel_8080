@@ -54,6 +54,44 @@ impl Cpu {
         );
     }
 
+    fn set_flags(&mut self, result: u16, carry: bool) {
+        self.cy = carry;
+        self.z = result == 0;
+        self.p = result & 1 == 0;
+        self.s = (result >> 15) & 1 == 1;
+    }
+
+    // TODO: Come up with some catch-all pair()/get_pair() functions
+    fn de(&self) -> u16 {
+        ((self.d as u16) << 8) | self.e as u16
+    }
+
+    fn set_de(&mut self, value: u16) {
+        self.d = ((value & 0xFF00) >> 8) as u8;
+        self.e = (value & 0x00FF) as u8;
+    }
+
+    fn hl(&self) -> u16 {
+        ((self.h as u16) << 8) | self.l as u16
+    }
+
+    fn set_hl(&mut self, value: u16) {
+        self.h = ((value & 0xFF00) >> 8) as u8;
+        self.l = (value & 0x00FF) as u8;
+    }
+
+    fn inx(&mut self, reg: u16) -> u16 {
+        let (result, carry) = reg.overflowing_add(1);
+        self.set_flags(result, carry);
+        result
+    }
+
+    fn dcr(&mut self, reg: u8) -> u8 {
+        let (result, carry) = reg.overflowing_sub(1);
+        self.set_flags(result as u16, carry);
+        result
+    }
+
     pub fn execute(&mut self) {
         let mut bytes: usize = 0;
         let mut advance_pc = true;
@@ -84,7 +122,11 @@ impl Cpu {
             0x02 => { bytes = 1; self.op_unimplemented("STAX B", "(BC) <- A") }, // STAX B
             0x03 => { bytes = 1; self.op_unimplemented("INX B", "BC <- BC+1") }, // INX B
             0x04 => { bytes = 1; self.op_unimplemented("INR B", "B <- B+1") }, // INR B
-            0x05 => { bytes = 1; self.op_unimplemented("DCR B", "B <- B-1") }, // DCR B
+            0x05 => {
+                self.op_implemented("DCR B", "B <- B-1");
+                bytes = 1;
+                self.b = self.dcr(self.b);
+            }, // DCR B
             0x06 => {
                 self.op_implemented(
                     &format!("MVI B,#${:02x}", byte_2),
@@ -120,14 +162,23 @@ impl Cpu {
                 self.e = byte_2;
             }, // LXI D,D16
             0x12 => { bytes = 1; self.op_unimplemented("STAX D", "(DE) <- A") }, // STAX D
-            0x13 => { bytes = 1; self.op_unimplemented("INX D", "DE <- DE + 1") }, // INX D
+            0x13 => {
+                self.op_implemented("INX D", "DE <- DE + 1");
+                bytes = 1;
+                let result = self.inx(self.de());
+                self.set_de(result);
+            }, // INX D
             0x14 => { bytes = 1; self.op_unimplemented("INR D", "D <- D+1") }, // INR D
             0x15 => { bytes = 1; self.op_unimplemented("DCR D", "D <- D-1") }, // DCR D
             0x16 => { bytes = 2; self.op_unimplemented("MVI D, D8", "D <- byte 2") }, // MVI D, D8
             0x17 => { bytes = 1; self.op_unimplemented("RAL", "A = A << 1; bit 0 = prev CY; CY = prev bit 7") }, // RAL
             0x18 => { bytes = 1; self.op_unimplemented("-", "") }, // -
             0x19 => { bytes = 1; self.op_unimplemented("DAD D", "HL = HL + DE") }, // DAD D
-            0x1a => { bytes = 1; self.op_unimplemented("LDAX D", "A <- (DE)") }, // LDAX D
+            0x1a => {
+                self.op_implemented("LDAX D", "A <- (DE)");
+                bytes = 1;
+                self.a = self.ram[self.de() as usize];
+            }, // LDAX D
             0x1b => { bytes = 1; self.op_unimplemented("DCX D", "DE = DE-1") }, // DCX D
             0x1c => { bytes = 1; self.op_unimplemented("INR E", "E <-E+1") }, // INR E
             0x1d => { bytes = 1; self.op_unimplemented("DCR E", "E <- E-1") }, // DCR E
@@ -144,7 +195,12 @@ impl Cpu {
                 self.l = byte_2;
             }, // LXI H,D16
             0x22 => { bytes = 3; self.op_unimplemented("SHLD adr", "(adr) <-L; (adr+1)<-H") }, // SHLD adr
-            0x23 => { bytes = 1; self.op_unimplemented("INX H", "HL <- HL + 1") }, // INX H
+            0x23 => {
+                self.op_implemented("INX H", "HL <- HL + 1");
+                bytes = 1;
+                let result = self.inx(self.hl());
+                self.set_hl(result);
+            }, // INX H
             0x24 => { bytes = 1; self.op_unimplemented("INR H", "H <- H+1") }, // INR H
             0x25 => { bytes = 1; self.op_unimplemented("DCR H", "H <- H-1") }, // DCR H
             0x26 => { bytes = 2; self.op_unimplemented("MVI H,D8", "H <- byte 2") }, // MVI H,D8
@@ -256,7 +312,12 @@ impl Cpu {
             0x74 => { bytes = 1; self.op_unimplemented("MOV M,H", "(HL) <- H") }, // MOV M,H
             0x75 => { bytes = 1; self.op_unimplemented("MOV M,L", "(HL) <- L") }, // MOV M,L
             0x76 => { bytes = 1; self.op_unimplemented("HLT", "special") }, // HLT
-            0x77 => { bytes = 1; self.op_unimplemented("MOV M,A", "(HL) <- A") }, // MOV M,A
+            0x77 => {
+                self.op_implemented("MOV M,A", "(HL) <- A");
+                bytes = 1;
+                let hl = self.hl() as usize; // TODO: This sucks bad
+                self.ram[hl] = self.a;
+            }, // MOV M,A
             0x78 => { bytes = 1; self.op_unimplemented("MOV A,B", "A <- B") }, // MOV A,B
             0x79 => { bytes = 1; self.op_unimplemented("MOV A,C", "A <- C") }, // MOV A,C
             0x7a => { bytes = 1; self.op_unimplemented("MOV A,D", "A <- D") }, // MOV A,D
@@ -371,7 +432,14 @@ impl Cpu {
             }, // ADI D8
             0xc7 => { bytes = 1; self.op_unimplemented("RST 0", "CALL $0") }, // RST 0
             0xc8 => { bytes = 1; self.op_unimplemented("RZ", "if Z, RET") }, // RZ
-            0xc9 => { bytes = 1; self.op_unimplemented("RET", "PC.lo <- (sp); PC.hi<-(sp+1); SP <- SP+2") }, // RET
+            0xc9 => {
+                self.op_implemented("RET", "PC.lo <- (sp); PC.hi<-(sp+1); SP <- SP+2");
+                bytes = 1;
+                self.pc = (self.ram[self.sp] as u16) << 8;
+                self.pc |= self.ram[self.sp + 1] as u16;
+                self.sp += 2; // TODO: Do flags need to be set? Probably not but I don't know.
+                advance_pc = false;
+            }, // RET
             0xca => {
                 self.op_implemented(
                     &format!("JZ ${:04x}", two_byte),
@@ -389,8 +457,9 @@ impl Cpu {
                     "(SP-1)<-PC.hi;(SP-2)<-PC.lo;SP<-SP-2;PC=adr"
                 );
                 bytes = 3;
+                self.pc += bytes as u16;
                 self.ram[self.sp - 1] = (self.pc & 0x00FF) as u8;
-                self.ram[self.sp - 2] = (self.pc & 0xFF00 >> 8) as u8;
+                self.ram[self.sp - 2] = ((self.pc & 0xFF00) >> 8) as u8;
                 self.sp -= 2;
                 self.pc = two_byte;
                 advance_pc = false;
